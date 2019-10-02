@@ -2,16 +2,17 @@
 language: julia
 os:
   - linux
+  - osx
 julia:
-  - 1.1
+  - 1
   - nightly
-
 notifications:
   email: false
 
-addons:
-  apt_packages:
-    - pandoc
+env:
+  global:
+  - PANDOC=~/.pandoc
+  - PANDOC_DEB="https://github.com/jgm/pandoc/releases/download/2.7.3/pandoc-2.7.3-1-amd64.deb"
 
 ## uncomment the following lines to allow failures on nightly julia
 ## (tests will run but not make your overall status red)
@@ -19,18 +20,21 @@ matrix:
   allow_failures:
   - julia: nightly
 
+cache:
+  directories:
+    - $PANDOC
+
+before_install:
+    - if [ "$TRAVIS_OS_NAME" = "osx" ]; then brew install pandoc; fi
+    - if [ "$TRAVIS_OS_NAME" = "linux" ]; then if [[ ! -f "$PANDOC/pandoc.deb" ]]; then curl -L "$PANDOC_DEB" > "$PANDOC/pandoc.deb" && dpkg -x "$PANDOC/pandoc.deb" "$PANDOC"; fi ; fi
+    - if [ "$TRAVIS_OS_NAME" = "linux" ]; then export PATH="$PANDOC/usr/bin:$PATH"; fi
+
 ## uncomment the following lines to override the default test script
 script:
-  # debian-supplied pandoc is very old --> install manually
-  - pandoc_version=`wget -O - --max-redirect 0 https://github.com/jgm/pandoc/releases/latest 2>&1 | grep "Location:" | sed 's/.*\/tag\/\([^ "]*\).*/\1/'`
-  - pandoc_deb="pandoc-${pandoc_version}-1-amd64.deb"
-  - wget "https://github.com/jgm/pandoc/releases/download/${pandoc_version}/${pandoc_deb}"
-  - sudo dpkg -i ${pandoc_deb}
-  - rm ${pandoc_deb}
-  # Register the installed pandoc version in the build log
-  - pandoc -v
+  - while sleep 9m; do echo "=====[ $SECONDS seconds still running ]====="; done &
   - julia --project --color=yes -e "import Pkg; Pkg.instantiate(); Pkg.build();"
   - julia --check-bounds=yes --depwarn=no --color=yes --project -e "import Pkg; Pkg.test(coverage=true);"
+  - kill %1
 
 after_success:
   - julia -e 'using Pkg; cd(Pkg.dir("Presentation")); Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
