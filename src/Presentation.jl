@@ -7,10 +7,17 @@ import Base: read
 
 using Crayons
 using Highlights
+using Highlights.Tokens
+using Highlights.Lexers
 using TerminalExtensions
 using Markdown
 
 export render, next, previous, current_slide
+
+abstract type PandocMarkdown end
+abstract type JuliaMarkdown end
+
+include("lexers.jl")
 
 include("utils.jl")
 include("slideshow.jl")

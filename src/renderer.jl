@@ -1,5 +1,9 @@
-const CODEBLOCK_FOREGROUND = get(ENV, "JLPRESENTATION_CODEBLOCK_FOREGROUND", 0x909090) |> UInt32
-const CODEBLOCK_BACKGROUND = get(ENV, "JLPRESENTATION_CODEBLOCK_BACKGROUND", 0xf0f0f0) |> UInt32
+const CODEBLOCK_FOREGROUND = get(ENV, "PRESENTATION_JL_CODEBLOCK_FOREGROUND", 0x909090) |> UInt32
+const CODEBLOCK_BACKGROUND = get(ENV, "PRESENTATION_JL_CODEBLOCK_BACKGROUND", 0xf0f0f0) |> UInt32
+const PRESENTATION_JL_LEXERS = Dict(
+                                    "julia" => JuliaLexer,
+                                    # "python" => PythonLexer,
+                                   )
 
 draw_border(io, x, y, w, h) = draw_border(io, x, y, w, h, Crayon())
 
@@ -156,10 +160,15 @@ hex2rgb(c) = convert.(Int, ((c >> 16) % 0x100, (c >> 8) % 0x100, c % 0x100))
 function render(io, e::Pandoc.CodeBlock)
     w = round(Int, getW() * 6 / 8)
     x, y = getXY()
-    if length(e.attr.classes) > 0 && e.attr.classes[1] == "julia"
-        iob = IOBuffer()
-        highlight(iob, MIME("text/ansi"), e.content, Lexers.JuliaLexer)
-        content = String(take!(iob))
+    if length(e.attr.classes) > 0
+        lexer = get(PRESENTATION_JL_LEXERS, e.attr.classes[1], AbstractLexer)
+        if lexer == AbstractLexer
+            content = e.content
+        else
+            iob = IOBuffer()
+            highlight(iob, MIME("text/ansi"), e.content, lexer)
+            content = String(take!(iob))
+        end
     else
         content = e.content
     end
@@ -266,36 +275,23 @@ function render(io, s::Slides)
     cmove_bottom()
 end
 
-function render(io, filename::AbstractString)
-
-    if Pandoc.exists()
-        render(io, PandocMarkdown, filename)
-    else
-        render(io, JuliaMarkdown, filename)
-    end
-
-end
-
 function render(io, md::Markdown.MD, filename)
-
-    data = Dict{String, Any}()
-    data["pandoc-api-version"] = v"0.0.1"
-    data["meta"] = Dict{String, Any}
-    data["blocks"] = Dict{String, Any}
-
-    for e in md.content
-        # TODO: convert JuliaMarkdown to PandocMarkdown
-        @show e
-    end
-
+    d = convert(Pandoc.Document, md)
+    render(io, d, filename)
 end
 
-function render(io, d::Pandoc.Document, filename::String="")
+function render(io, d::Pandoc.Document, filename::AbstractString="")
     global SLIDES
     s = Slides(d, filename)
     SLIDES = s
     return render(io, s)
 end
 
-render(io, ::Type{T}, filename::String) where T = render(io, read(T, filename), filename)
+render(io, filename::AbstractString) = Pandoc.exists() ? render(io, PandocMarkdown, filename) : render(io, JuliaMarkdown, filename)
+
+render(io, ::Type{T}, filename::AbstractString) where T = render(io, read(T, filename), filename)
+
+Base.read(::Type{PandocMarkdown}, filename::AbstractString) = Pandoc.parse_file(filename)
+
+Base.read(::Type{JuliaMarkdown}, filename::AbstractString) = Markdown.parse_file(filename)
 
